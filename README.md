@@ -1,11 +1,3 @@
-<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
-
-# Crie um arquivo Markdown para o meu Github desse projeto GuruGPT baseado nesse código python e no requirements.txt e tudo que fez nesse tópico com tutorial de instalação e etc... pode usar emojis para ficar mais visualizável.
-
-Segue um modelo de `README.md` em Markdown que você pode colocar direto no GitHub (ajuste o que quiser, como nome do repositório, prints etc.):
-
-***
-
 ```markdown
 # 🧘 GuruGPT – Chatbot IA com Streamlit + Ollama
 
