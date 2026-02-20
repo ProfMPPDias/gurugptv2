@@ -6,6 +6,7 @@ Anonymous multi-session chatbot with PDF analysis and conversation history.
 import uuid
 import time
 import streamlit as st
+import streamlit.components.v1 as components
 import fitz  # PyMuPDF
 
 # ─────────────────────────────────────────────────
@@ -65,10 +66,11 @@ html, body, [class*="css"] {
 [data-testid="stSidebar"] {
     background: var(--bg-sidebar) !important;
     border-right: 1px solid var(--border);
-    resize: horizontal;
-    overflow: auto;
+    resize: none;
+    overflow: hidden;
     min-width: 220px !important;
-    max-width: 500px;
+    max-width: 260px !important;
+    width: 260px !important;
     transform: none !important;
     translate: none !important;
     margin-left: 0 !important;
@@ -403,117 +405,326 @@ header { visibility: hidden; }
 [data-testid="stMain"] .block-container {
     padding-bottom: 3rem !important;
 }
+
+/* Botão ☰ e backdrop mobile — ocultos por padrão (desktop); @media mobile os reexibe */
+#mobile-menu-btn { display: none !important; }
+#mobile-sidebar-backdrop { display: none; }
+
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVIDADE MOBILE  (≤ 768 px)
+   ═══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+    /* ── Sidebar vira overlay deslizante ── */
+    [data-testid="stSidebar"] {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        height: 100dvh !important;
+        width: 82vw !important;
+        min-width: unset !important;
+        max-width: 320px !important;
+        z-index: 9999 !important;
+        transform: translateX(-100%) !important;
+        transition: transform 0.28s cubic-bezier(.4,0,.2,1) !important;
+        resize: none !important;
+        box-shadow: 4px 0 32px rgba(0,0,0,0.65);
+        overflow-y: auto !important;
+        translate: none !important; /* override do CSS desktop */
+    }
+
+    [data-testid="stSidebar"].mobile-open {
+        transform: translateX(0) !important;
+    }
+
+    /* Backdrop escuro atrás do menu */
+    #mobile-sidebar-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.55);
+        z-index: 9998;
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+    }
+    #mobile-sidebar-backdrop.visible { display: block; }
+
+    /* Botão ☰ flutuante para abrir o menu */
+    #mobile-menu-btn {
+        display: flex !important;
+        position: fixed;
+        top: 14px;
+        left: 14px;
+        z-index: 10000;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #7c3aed, #4f46e5);
+        color: white;
+        font-size: 1.3rem;
+        border: none;
+        cursor: pointer;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 20px rgba(124,58,237,0.55);
+        transition: transform 0.15s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+    #mobile-menu-btn:active { transform: scale(0.9); }
+
+    /* Área principal — sem margem do sidebar */
+    [data-testid="stMain"] {
+        margin-left: 0 !important;
+        width: 100vw !important;
+    }
+
+    [data-testid="stMain"] .block-container {
+        padding: 4.2rem 0.75rem 5rem !important;
+        max-width: 100% !important;
+    }
+
+    /* Logo compacta */
+    .gurugpt-logo { padding: 0.4rem 0 0.2rem; }
+    .gurugpt-logo .icon-wrap {
+        width: 50px; height: 50px;
+        font-size: 1.55rem; border-radius: 14px;
+        margin-bottom: 7px;
+    }
+    .gurugpt-logo h1 { font-size: 1.85rem; }
+    .gurugpt-logo p  { font-size: 0.76rem; }
+
+    /* Mensagens */
+    .stChatMessageContent {
+        padding: 0.6rem 0.85rem !important;
+        font-size: 0.91rem !important;
+    }
+
+    /* Blocos de código — scroll horizontal */
+    pre {
+        font-size: 0.77rem !important;
+        padding: 0.7rem !important;
+        border-radius: 8px !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Input de chat */
+    [data-testid="stChatInput"] textarea {
+        font-size: 1rem !important;
+        min-height: 48px !important;
+    }
+
+    /* Botões maiores para toque */
+    .stButton > button {
+        min-height: 44px !important;
+        font-size: 0.93rem !important;
+    }
+
+    /* Footer compacto */
+    .gurugpt-footer {
+        font-size: 0.66rem;
+        padding: 0.38rem 0.5rem;
+    }
+
+    /* Selectbox fullwidth */
+    .stSelectbox { width: 100% !important; }
+
+    /* Ocultar botão reabrir sidebar do desktop no mobile */
+    #gurugpt-sidebar-open-btn { display: none !important; }
+}
+
+/* Telas muito pequenas (≤ 380 px — iPhone SE, Galaxy A) */
+@media (max-width: 380px) {
+    .gurugpt-logo h1 { font-size: 1.55rem; }
+    .gurugpt-logo .icon-wrap { width: 42px; height: 42px; font-size: 1.3rem; }
+    [data-testid="stMain"] .block-container { padding: 3.8rem 0.5rem 5rem !important; }
+}
 </style>
 """
 
-# ── Floating sidebar-reopen button injected directly to document.body ──
-# This runs independently of Streamlit's component tree so it can never
-# be hidden when the sidebar collapses.
-SIDEBAR_TOGGLE_JS = """
+# ═══════════════════════════════════════════════════════════════
+# MOBILE ☰ BUTTON — rendered as STATIC HTML (never created by JS)
+# Two overlapping spans inside the button: .gg-ham (☰) and .gg-x (✕).
+# CSS transitions swap them when #gg-btn has class 'open'.
+# ═══════════════════════════════════════════════════════════════
+MOBILE_BTN_HTML = (
+    '<div id="gg-wrap-2" style="'
+    'position:fixed;top:14px;left:14px;z-index:2147483647;'
+    'display:none;">'
+    '<button id="gg-btn-2" title="Abrir/fechar menu" style="'
+    'position:relative;width:48px;height:48px;border-radius:14px;'
+    'background:linear-gradient(135deg,#7c3aed,#4f46e5);'
+    'color:white;font-size:1.5rem;border:none;cursor:pointer;'
+    'display:flex;align-items:center;justify-content:center;'
+    'box-shadow:0 4px 24px rgba(124,58,237,0.65);'
+    '-webkit-tap-highlight-color:transparent;user-select:none;'
+    'overflow:hidden;">'
+    # Two layered icons
+    '<span class="gg-ham" style="'
+    'position:absolute;transition:opacity .25s,transform .25s;'
+    'opacity:1;transform:rotate(0deg);">&#9776;</span>'
+    '<span class="gg-x" style="'
+    'position:absolute;transition:opacity .25s,transform .25s;'
+    'opacity:0;transform:rotate(-90deg);font-size:1.2rem;">&#10005;</span>'
+    '</button></div>'
+    # Backdrop
+    '<div id="gg-bd" '
+    'style="'
+    'display:none;position:fixed;inset:0;'
+    'background:rgba(0,0,0,0.55);'
+    'backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);'
+    'z-index:9997;"></div>'
+    # CSS: show/hide + transition
+    '<style>'
+    '@media(max-width:768px){#gg-wrap-2{display:flex!important;}}'
+    '@media(min-width:769px){#gg-wrap-2,#gg-bd{display:none!important;}}'
+    # Open state: when body has class 'gg-sidebar-open', swap icons
+    'body.gg-sidebar-open #gg-btn-2 .gg-ham{opacity:0!important;transform:rotate(90deg)!important;}'
+    'body.gg-sidebar-open #gg-btn-2 .gg-x{opacity:1!important;transform:rotate(0deg)!important;}'
+    '#gg-btn-2:active{transform:scale(0.86);}'
+    '</style>'
+)
+
+# ═══════════════════════════════════════════════════════════════════
+# TOGGLE_COMPONENT_HTML — injected via st.components.v1.html(height=0)
+#
+# Why components.v1.html instead of st.markdown?
+#   st.markdown <script> tags: Streamlit re-executes them via createElement
+#   but timing with React's rendering is unreliable. The iframe created by
+#   components.v1.html() executes scripts synchronously and has same-origin
+#   access to window.parent.document (both served from localhost:8501).
+#
+# Strategy:
+#   1. Access parent document from iframe (window.parent)
+#   2. Define _ggOpen / _ggClose in the PARENT window scope
+#   3. Use MutationObserver on parent.body to detect gg-wrap instantly
+#   4. Move gg-wrap + gg-bd to parent.body (escape React's managed tree)
+#   5. addEventListener works correctly outside React tree (no Error #231)
+#   6. setProperty(prop, val, 'important') overrides all CSS !important rules
+# ═══════════════════════════════════════════════════════════════════
+TOGGLE_COMPONENT_HTML = """<!DOCTYPE html><html><body style="margin:0;padding:0;overflow:hidden">
 <script>
-(function () {
-    const BTN_ID = 'gurugpt-sidebar-open-btn';
+(function(){
+  var P  = window.parent;        /* Parent window (main Streamlit page)  */
+  var PD = P.document;           /* Parent document                      */
+  var PB = PD.body;              /* Parent body                          */
 
-    /* ── Build the button once ── */
-    function buildBtn() {
-        const existing = document.getElementById(BTN_ID);
-        if (existing) return existing;
-
-        const btn = document.createElement('button');
-        btn.id = BTN_ID;
-        btn.title = 'Abrir painel lateral';
-        btn.textContent = '☰';
-        Object.assign(btn.style, {
-            position:     'fixed',
-            top:          '50vh',
-            left:         '0',
-            transform:    'translateY(-50%)',
-            zIndex:       '2147483647',
-            background:   'linear-gradient(180deg,#7c3aed 0%,#4f46e5 100%)',
-            color:        'white',
-            border:       'none',
-            borderRadius: '0 14px 14px 0',
-            width:        '40px',
-            height:       '56px',
-            fontSize:     '1.2rem',
-            cursor:       'pointer',
-            display:      'none',
-            alignItems:   'center',
-            justifyContent: 'center',
-            boxShadow:    '4px 0 24px rgba(124,58,237,0.75)',
-            transition:   'width .2s, box-shadow .2s',
-            fontFamily:   'sans-serif',
-            lineHeight:   '1',
-        });
-
-        btn.addEventListener('mouseenter', () => {
-            btn.style.width = '50px';
-            btn.style.boxShadow = '6px 0 32px rgba(124,58,237,0.95)';
-        });
-        btn.addEventListener('mouseleave', () => {
-            btn.style.width = '40px';
-            btn.style.boxShadow = '4px 0 24px rgba(124,58,237,0.75)';
-        });
-        btn.addEventListener('click', openSidebar);
-
-        document.body.appendChild(btn);
-        return btn;
+  /* ── _ggOpen / _ggClose: toggle the drawer ── */
+  P._ggOpen = function() {
+    var sb = PD.querySelector('[data-testid="stSidebar"]');
+    /* Toggle: if already open → close */
+    if (sb && sb.classList.contains('mobile-open')) {
+      P._ggClose();
+      return;
     }
-
-    /* ── Click the hidden Streamlit arrow to expand the sidebar ── */
-    function openSidebar() {
-        // Streamlit places the expand arrow in [data-testid="collapsedControl"]
-        const arrow = document.querySelector('[data-testid="collapsedControl"] button')
-                   || document.querySelector('[data-testid="collapsedControl"]');
-        if (arrow) { arrow.click(); return; }
-
-        // Fallback: look for any sidebar toggle button
-        const toggle = document.querySelector('[data-testid="stSidebarCollapseButton"] button')
-                    || document.querySelector('button[kind="header"]');
-        if (toggle) toggle.click();
+    if (sb) {
+      sb.classList.add('mobile-open');
+      [['position','fixed'],['top','0'],['left','0'],['width','82vw'],
+       ['max-width','320px'],['height','100dvh'],['transform','translateX(0)'],
+       ['translate','none'],['display','flex'],['visibility','visible'],
+       ['opacity','1'],['z-index','99999'],['overflow-y','auto']
+      ].forEach(function(p){ sb.style.setProperty(p[0],p[1],'important'); });
     }
-
-    /* ── Detect whether the sidebar is currently collapsed ── */
-    function isSidebarVisible() {
-        const sidebar = document.querySelector('[data-testid="stSidebar"]');
-        if (!sidebar) return false;
-        const w = sidebar.getBoundingClientRect().width;
-        return w > 60;   // anything below 60 px is considered collapsed
+    /* Animate button ☰ → ✕ (by adding class to BODY, persistent across re-renders) */
+    if (PD.body) PD.body.classList.add('gg-sidebar-open');
+    var bd = PD.getElementById('gg-bd');
+    if (bd) bd.style.display = 'block';
+  };
+  P._ggClose = function() {
+    var sb = PD.querySelector('[data-testid="stSidebar"]');
+    if (sb) {
+      sb.classList.remove('mobile-open');
+      ['position','top','left','width','max-width','height','transform',
+       'translate','display','visibility','opacity','z-index','overflow-y'
+      ].forEach(function(p){ sb.style.removeProperty(p); });
     }
+    /* Animate button ✕ → ☰ */
+    if (PD.body) PD.body.classList.remove('gg-sidebar-open');
+    var bd = PD.getElementById('gg-bd');
+    if (bd) bd.style.display = 'none';
+  };
 
-    /* ── Update button display ── */
-    function sync() {
-        const btn = buildBtn();
-        btn.style.display = isSidebarVisible() ? 'none' : 'flex';
-    }
+  /* ── Adopt button + backdrop: move to parent.body, attach handlers ── */
+  var _btnReady = false;
+  function adoptBtn() {
+    if (_btnReady) return;
+    var wrap = PD.getElementById('gg-wrap-2');
+    var btn  = PD.getElementById('gg-btn-2');
+    var bd   = PD.getElementById('gg-bd');
+    if (!wrap || !btn) return;
 
-    /* ── Pulse glow (CSS keyframes won't work inline, use JS animation) ── */
-    function startPulse(btn) {
-        let t = 0;
-        setInterval(() => {
-            t += 0.05;
-            const glow = 0.55 + 0.3 * Math.sin(t);
-            btn.style.boxShadow = `4px 0 ${Math.round(20 + 16 * Math.sin(t))}px rgba(124,58,237,${glow.toFixed(2)})`;
-        }, 50);
-    }
+    /* Move elements out of React's managed tree */
+    if (wrap.parentElement !== PB) PB.appendChild(wrap);
+    if (bd && bd.parentElement !== PB) PB.appendChild(bd);
 
-    /* ── Boot: wait until body exists then initialise ── */
-    function boot() {
-        const btn = buildBtn();
-        startPulse(btn);
-        sync();
-        // Poll every 400 ms — works across Streamlit re-renders
-        setInterval(sync, 400);
-    }
+    /* Attach click handlers (safe outside React tree) */
+    btn.addEventListener('click', P._ggOpen);
+    if (bd) bd.addEventListener('click', P._ggClose);
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', boot);
-    } else {
-        boot();
+    /* Swipe left → close */
+    var tx = 0;
+    PD.addEventListener('touchstart',function(e){tx=e.changedTouches[0].screenX;},{passive:true});
+    PD.addEventListener('touchend',function(e){
+      if(e.changedTouches[0].screenX-tx<-60) P._ggClose();
+    },{passive:true});
+
+    _btnReady = true;
+  }
+
+  /* MutationObserver: fires the instant gg-wrap appears in the DOM */
+  var obs = new MutationObserver(function(){ adoptBtn(); });
+  obs.observe(PB, {childList:true, subtree:true});
+  adoptBtn(); /* also try immediately in case already in DOM */
+
+  /* ── Desktop floating reopen button ── */
+  var DESK_ID = 'gurugpt-sidebar-open-btn';
+  function ensureDesktop() {
+    var b = PD.getElementById(DESK_ID);
+    if (!b) {
+      b = PD.createElement('button');
+      b.id = DESK_ID;
+      b.title = 'Abrir painel lateral';
+      b.innerHTML = '&#9776;';
+      Object.assign(b.style, {
+        position:'fixed', top:'50vh', left:'0',
+        transform:'translateY(-50%)', zIndex:'2147483646',
+        background:'linear-gradient(180deg,#7c3aed,#4f46e5)',
+        color:'white', border:'none', borderRadius:'0 14px 14px 0',
+        width:'40px', height:'56px', fontSize:'1.2rem',
+        cursor:'pointer', display:'none',
+        alignItems:'center', justifyContent:'center',
+        boxShadow:'4px 0 24px rgba(124,58,237,0.75)',
+        transition:'width .2s', fontFamily:'sans-serif', lineHeight:'1',
+      });
+      b.addEventListener('mouseenter',function(){b.style.width='50px';});
+      b.addEventListener('mouseleave',function(){b.style.width='40px';});
+      b.addEventListener('click',function(){
+        var t = PD.querySelector('[data-testid="collapsedControl"] button')
+             || PD.querySelector('[data-testid="stSidebarCollapseButton"] button');
+        if (t) t.click();
+      });
+      PB.appendChild(b);
+      var pt=0;
+      setInterval(function(){
+        pt+=0.05;
+        var g=0.55+0.3*Math.sin(pt);
+        b.style.boxShadow='4px 0 '+Math.round(20+16*Math.sin(pt))+'px rgba(124,58,237,'+g.toFixed(2)+')';
+      },50);
     }
+    if (P.innerWidth<=768){b.style.display='none';return;}
+    var sb=PD.querySelector('[data-testid="stSidebar"]');
+    b.style.display=(sb&&sb.getBoundingClientRect().width>60)?'none':'flex';
+  }
+  ensureDesktop();
+  setTimeout(ensureDesktop,400);
+  setInterval(ensureDesktop,1500);
+  P.addEventListener('resize',ensureDesktop);
 })();
 </script>
-"""
+</body></html>"""
+
+
 
 
 # ─────────────────────────────────────────────────
@@ -619,21 +830,80 @@ def render_sidebar(models: list[str]) -> str | None:
                 <span style="font-family:'Outfit',sans-serif;font-size:1.3rem;font-weight:900;
                 background:linear-gradient(135deg,#c4b5fd,#7c3aed);
                 -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-                background-clip:text;">🧘 GuruGPT</span>
+                background-clip:text;">&#129368; GuruGPT</span>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
+        # Styles for conversation rows (title + X as one visual unit)
+        st.markdown(
+            """
+            <style>
+            /* Nova Conversa centralizado */
+            [data-testid="stSidebar"] [data-testid="stBaseButton-secondary"]:first-of-type {
+                text-align: center !important;
+                justify-content: center !important;
+            }
+            /* Conversation rows: force single-line flex layout on mobile */
+            .conv-row [data-testid="stHorizontalBlock"] {
+                gap: 0 !important;
+                margin-bottom: 5px !important;
+                flex-wrap: nowrap !important;
+                align-items: stretch !important;
+            }
+            .conv-row [data-testid="stColumn"] {
+                min-width: 0 !important;
+                flex-shrink: 1 !important;
+            }
+            .conv-row [data-testid="stColumn"]:last-child {
+                flex: 0 0 auto !important;
+                width: auto !important;
+            }
+            /* Title button: left side pill */
+            .conv-row [data-testid="column"]:first-child button,
+            .conv-row [data-testid="stColumn"]:first-child button {
+                border-radius: 10px 0 0 10px !important;
+                text-align: left !important;
+                border-right: 1px solid rgba(124,58,237,0.2) !important;
+            }
+            /* X button: right side pill */
+            .conv-row [data-testid="column"]:last-child button,
+            .conv-row [data-testid="stColumn"]:last-child button {
+                border-radius: 0 10px 10px 0 !important;
+                background: transparent !important;
+                color: #6b6a8a !important;
+                font-weight: 500 !important;
+                font-size: 0.65rem !important;
+                letter-spacing: 0 !important;
+                box-shadow: none !important;
+                padding: 0 6px !important;
+                height: 100% !important;
+                min-height: 0 !important;
+                line-height: 1.2 !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+            }
+            .conv-row [data-testid="column"]:last-child button:hover,
+            .conv-row [data-testid="stColumn"]:last-child button:hover {
+                background: rgba(239,68,68,0.18) !important;
+                color: #ef4444 !important;
+                transform: none !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
         # New chat button
-        if st.button("➕  Nova Conversa", key="new_chat_btn"):
+        if st.button("\u2795\u2009 Nova Conversa", key="new_chat_btn", use_container_width=True):
             _new_conv()
             st.rerun()
 
         st.markdown("<hr class='g-divider'>", unsafe_allow_html=True)
 
         # Conversation history
-        st.markdown("<div class='sidebar-title'>Histórico</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sidebar-title'>Hist\u00f3rico</div>", unsafe_allow_html=True)
 
         convs = st.session_state.conversations
         active = st.session_state.active_conv
@@ -647,11 +917,12 @@ def render_sidebar(models: list[str]) -> str | None:
             for cid, conv in list(convs.items()):
                 is_active = cid == active
                 title = conv["title"]
-                icon = "💬" if is_active else "🗨️"
+                icon = "\U0001f4ac" if is_active else "\U0001f5e8\ufe0f"
 
-                col1, col2 = st.columns([5, 1])
-                with col1:
-                    css_class = "conv-item active" if is_active else "conv-item"
+                st.markdown("<div class='conv-row'>", unsafe_allow_html=True)
+                col_t, col_x = st.columns([8, 1])
+
+                with col_t:
                     if st.button(
                         f"{icon} {title}",
                         key=f"conv_{cid}",
@@ -663,26 +934,25 @@ def render_sidebar(models: list[str]) -> str | None:
                         st.session_state.pdf_name = None
                         st.rerun()
 
-                with col2:
-                    with st.container():
-                        st.markdown("<div class='delete-btn'>", unsafe_allow_html=True)
-                        if st.button("🗑", key=f"del_{cid}", help="Apagar conversa"):
-                            del st.session_state.conversations[cid]
-                            if cid == active:
-                                if st.session_state.conversations:
-                                    st.session_state.active_conv = list(
-                                        st.session_state.conversations.keys()
-                                    )[-1]
-                                else:
-                                    _new_conv()
-                            st.rerun()
-                        st.markdown("</div>", unsafe_allow_html=True)
+                with col_x:
+                    if st.button("×", key=f"del_{cid}", help="Apagar conversa", use_container_width=True):
+                        del st.session_state.conversations[cid]
+                        if cid == active:
+                            if st.session_state.conversations:
+                                st.session_state.active_conv = list(
+                                    st.session_state.conversations.keys()
+                                )[-1]
+                            else:
+                                _new_conv()
+                        st.rerun()
+
+                st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("<hr class='g-divider'>", unsafe_allow_html=True)
 
         # Session info
         st.markdown(
-            f"<p style='font-size:0.72rem;color:#6b6a8a;text-align:center;'>Sessão anônima · {st.session_state.anon_id}</p>",
+            f"<p style='font-size:0.72rem;color:#6b6a8a;text-align:center;'>Sess\u00e3o an\u00f4nima \u00b7 {st.session_state.anon_id}</p>",
             unsafe_allow_html=True,
         )
 
@@ -696,7 +966,7 @@ def render_sidebar(models: list[str]) -> str | None:
                 key="selected_model",
             )
         else:
-            st.warning("Ollama não encontrado ou sem modelos instalados.")
+            st.warning("Ollama n\u00e3o encontrado ou sem modelos instalados.")
             selected_model = None
 
         return selected_model
@@ -794,7 +1064,12 @@ def render_chat(selected_model: str | None):
         # System prompt enriched with PDF context if present
         system_content = (
             "Você é o GuruGPT, um assistente de IA sábio, claro e útil. "
-            "Responda sempre de forma organizada e em português, salvo quando o usuário escrever em outro idioma."
+            "Responda sempre de forma organizada e em português, salvo quando o usuário escrever em outro idioma.\n\n"
+            "Regras de formatação obrigatórias:\n"
+            "- Sempre que incluir código-fonte (em qualquer linguagem), envolva-o em um bloco Markdown com o identificador da linguagem. "
+            "Exemplo: use ```python ... ``` para Python, ```javascript ... ``` para JavaScript, ```java ... ``` para Java, etc.\n"
+            "- Nunca exiba código como texto simples ou dentro de parágrafos.\n"
+            "- Use títulos (##), listas e negrito (**texto**) para organizar explicações longas."
         )
         if st.session_state.pdf_context:
             system_content += (
@@ -828,7 +1103,15 @@ def render_chat(selected_model: str | None):
             with st.spinner(""):
                 for chunk in stream_ollama_response(selected_model, api_messages):
                     full_response += chunk
-                    response_placeholder.markdown(full_response + "▌")
+                    # Count backtick-fence openings to detect if we're inside a code block.
+                    # An odd number of ``` in the response means a block is still open.
+                    open_fences = full_response.count("```") % 2 == 1
+                    if open_fences:
+                        # Close the fence temporarily so Markdown renders correctly,
+                        # then show the cursor on a new line outside the block.
+                        response_placeholder.markdown(full_response + "\n```\n\n▌")
+                    else:
+                        response_placeholder.markdown(full_response + "▌")
             response_placeholder.markdown(full_response)
 
         conv["messages"].append({"role": "assistant", "content": full_response})
@@ -841,6 +1124,12 @@ def render_chat(selected_model: str | None):
 
 def main():
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+    # ☰ button: STATIC HTML — always in DOM, no JS needed to create it
+    st.markdown(MOBILE_BTN_HTML, unsafe_allow_html=True)
+    # JS via iframe (components.v1.html guarantees script execution):
+    # accesses window.parent.document, moves button out of React tree,
+    # attaches addEventListener safely outside React's managed DOM.
+    components.html(TOGGLE_COMPONENT_HTML, height=0)
 
     # Force sidebar always open: clear Streamlit's cached collapsed state
     st.markdown("""
